@@ -1,0 +1,227 @@
+---
+title: "Country DQ Groupings"
+author: "Lillian Chen"
+date: "1/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(easypackages)
+library(data.table)
+
+#packages needed for spatial data analysis in R
+pkgs<- c("devtools","animation","dismo",
+         "gdalUtils","geosphere","ggplot2",
+         "gstat","ks","leaflet","lwgeom",
+         "maptools","mapview","raster",
+         "rasterVis","rgdal","rgeos","rnaturalearth", 
+         "rnaturalearthdata", "sf", "sp","spatstat",
+         "tidyverse")
+
+
+#installs packages for any packages not in the installed packages on my R
+if(any(!(pkgs %in% installed.packages()))){
+  install.packages(pkgs[!(pkgs %in% installed.packages())],
+                   dependencies = TRUE)}
+
+libraries(pkgs)
+
+```
+
+summary of task:
+* put NA as hash marks
+* reference: https://mhallwor.github.io/_pages/Tidyverse_intro
+
+```{r}
+setwd("D:\\CCPR\\01-18-22")
+#data <- readxl::read_xlsx("DQ_Groupings.xlsx")
+data <- readxl::read_xlsx("Figure 4.xlsx")
+```
+
+Notes:
+
+
+suggestion: manual search with the viewer with shortened root (tokenization, scrub out punctuation, spaces)
+make note if still cannot find in world dataset
+
+Bonaire, Sint Eustatius and Saba
+
+
+```{r}
+# devtools::install_github("ropensci/rnaturalearthhires")
+library("rnaturalearth")
+library("rnaturalearthdata")
+library("rnaturalearthhires")
+
+world <- ne_countries(scale = "large", returnclass = "sf")
+class(world)
+
+francepoly <- st_cast(world$geometry[world$name_long=="France"], "POLYGON")
+# 1: french guiana
+# 4,6,7,19,20: guadaloupe
+# 3: martinique
+# 9,10: mayotte
+#8: reunion
+
+fgupoly <- st_cast(francepoly[1], "MULTIPOLYGON")
+glppoly <- st_union(st_cast(francepoly[c(4,6,7,19,20)], "MULTIPOLYGON"))
+mtqpoly <- st_cast(francepoly[3], "MULTIPOLYGON")
+mytpoly <- st_union(st_cast(francepoly[c(9,10)], "MULTIPOLYGON"))
+reupoly <- st_cast(francepoly[8], "MULTIPOLYGON")
+frpoly <-st_union(st_cast(francepoly[c(2,5,11,12,13,14,15,16,17,18)], "MULTIPOLYGON"))
+
+# bes <- shapefile("D:\\CCPR\\01-18-22\\bes_adm0\\BES_adm0.shp")
+# fguiana <- shapefile("D:\\CCPR\\01-18-22\\GUF_adm\\GUF_adm0.shp")
+# guadaloupe <- shapefile("D:\\CCPR\\01-18-22\\GLP_adm\\GLP_adm0.shp")
+# martinique <- shapefile("D:\\CCPR\\01-18-22\\MTQ_adm\\MTQ_adm0.shp")
+# mayotte <- shapefile("D:\\CCPR\\01-18-22\\MYT_adm\\MYT_adm0.shp")
+# reunion <- shapefile("D:\\CCPR\\01-18-22\\REU_adm\\REU_adm0.shp")
+
+# bes_sf <- st_as_sf(bes)
+# fguiana_sf <- st_as_sf(fguiana)
+# guadaloupe_sf <- st_as_sf(guadaloupe)
+# martinique_sf <- st_as_sf(martinique)
+# mayotte_sf <- st_as_sf(mayotte)
+# reunion_sf <- st_as_sf(reunion)
+
+# glp_poly <- st_cast(guadaloupe_sf$geometry, "POLYGON")
+# mtq_poly <- st_cast(martinique_sf$geometry, "POLYGON")
+# myt_poly <- st_cast(mayotte_sf$geometry, "POLYGON")
+
+```
+
+```{r}
+# if country name not in world data set then list name 
+
+mismatched <- vector()
+
+# change all names to lowercase
+for (i in 1:nrow(data)){
+  if (data$worldsf[i] %in% c(world$name, world$name_long, world$formal_en)){ 
+    next
+  }
+  else{ # append to vector if name in data does not match exactly to names in world 
+    x <- data$worldsf[i]
+    mismatched <- append(mismatched, x)
+  }
+}
+
+# write code to sort these names
+```
+
+
+```{r}
+
+world$Categories <- "NA"
+
+fdepts <- c("French Guiana", "Guadaloupe", "Martinique", "Mayotte", "Reunion")
+# manual add of polygons for the missing french departments
+
+poly <- francepoly[1]
+fguianadata <- c(rep("French Guiana", 3), "2", poly) # 2
+guadaloupedata <- as.data.table(c(rep("Guadaloupe", 3), "2", poly)) # 2
+martiniquedata <- as.data.table(c(rep("Martinique", 3), "2", poly)) # 2
+mayottedata <- as.data.table(c(rep("Mayotte", 3), "2", poly)) # 2
+reuniondata <- as.data.table(c(rep("Reunion", 3), "1", poly)) # 1
+
+
+
+l <- list(fguianadata,guadaloupedata,martiniquedata,mayottedata,reuniondata)
+t <- rbindlist(l, use.names=TRUE, fill=TRUE)
+colnames(t) <- c("name","name_long","formal_en", "Categories", "geometry")
+t$geometry <- c(fgupoly, glppoly, mtqpoly, mytpoly, reupoly)
+t <- st_as_sf(t)
+
+x <- "not updated"
+for (i in 1:length(data$worldsf)){
+  if (data$worldsf[i] %in% c(world$name, world$name_long, world$formal_en)){
+    x <- grep(data$worldsf[i], world$name)
+    if (length(x) == 0){
+      x <- grep(data$worldsf[i], world$name_long)
+    }
+    if (length(x) == 0){
+      x <- grep(data$worldsf[i], world$formal_en)
+    }
+    world$Categories[x] <- data$Categories[i]
+  }
+  else{
+    next
+  }
+}
+
+world$Categories <- factor(world$Categories, levels = c("NA", "1", "2", "3"))
+
+
+
+testdata <- world[, c("name","name_long","formal_en","Categories", "geometry")]
+
+testdata <- rbind(testdata, t)
+testdata$geometry[testdata$name_long=="France"] <- frpoly
+
+testdata$pattern[testdata$Categories == "NA"] <- "Yes"
+testdata$pattern[testdata$Categories != "NA"] <- "No"
+
+```
+
+```{r}
+# remotes::install_github("coolbutuseless/ggpattern")
+library(ggpattern)
+options(ggpattern_use_R4.1_features = FALSE)
+
+labels <- c("NA", "Maximum < 2 years", 
+            "Maximum > 2 years, average < 2 years", 
+            "Average > 2 years")
+
+# blue color plot
+bluepalette <- c("NA" = "white", "1" = "#bdd7e7", "2" = "#6baed6", "3" = "#2171b5")
+colorplot <- ggplot() +
+  geom_sf(data = testdata, aes(fill = Categories))+
+  scale_fill_manual(name = "Annual Decline, 2019-2021",
+                    values=bluepalette, labels  = str_wrap(labels,33)) +
+  theme_classic()
+
+
+#grayscale
+graypalette <-c("NA" = "white", "1" = "gray85", "2" = "gray50", "3" = "gray30")
+graystripeplot <- ggplot(data = testdata, aes(fill = Categories, pattern = Categories)) +
+  geom_sf_pattern(pattern_colour = "black", 
+                  pattern_fill = "black",
+                  pattern_angle = 45,
+                  pattern_density = 0.1,
+                  pattern_spacing = 0.025,
+                  pattern_linetype = 1,
+                  pattern_size = 0.5,
+                  pattern_key_scale_factor = 0.6)+
+  scale_fill_manual(name = "Annual Decline, 2019-2021",
+                    values=graypalette, labels = str_wrap(labels,33)) +
+  scale_pattern_manual(name = "Annual Decline, 2019-2021",
+                       values=c("NA" = "stripe", 
+                                "1" = "none", 
+                                "2" = "none", 
+                                "3" = "none"),
+                       labels  = str_wrap(labels,33)) +
+  theme_classic()
+
+graydottedplot <- ggplot(data = testdata, aes(fill = Categories, pattern = Categories)) +
+  geom_sf_pattern(pattern_colour = "black", 
+                  pattern_fill = "black",
+                  pattern_angle = 45,
+                  pattern_density = 0.1,
+                  pattern_spacing = 0.025,
+                  pattern_linetype = 1,
+                  pattern_size = 0.3,
+                  pattern_key_scale_factor = 0.8) +
+  scale_fill_manual(name = "Annual Decline, 2019-2021",
+                    values=graypalette, labels = str_wrap(labels,33)) +
+  scale_pattern_manual(name = "Annual Decline, 2019-2021",
+                       values=c("NA" = "circle", 
+                                "1" = "none", 
+                                "2" = "none", 
+                                "3" = "none"),
+                       labels  = str_wrap(labels,33)) +
+  theme_classic()
+
+```
+

@@ -42,11 +42,9 @@ data <- readxl::read_xlsx("Figure 4.xlsx")
 
 Notes:
 
-
 suggestion: manual search with the viewer with shortened root (tokenization, scrub out punctuation, spaces)
 make note if still cannot find in world dataset
 
-Bonaire, Sint Eustatius and Saba
 
 
 ```{r}
